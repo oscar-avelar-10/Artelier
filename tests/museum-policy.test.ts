@@ -1,4 +1,5 @@
 import test from 'node:test';
+import { MemoryPolicyDatabase, RedisPolicyDatabase, getProtectionStore } from '../lib/vercel-store.ts';
 import { serveMuseumJSON } from '../lib/museum-service-core.ts';
 import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
@@ -156,4 +157,46 @@ test('edge-compatible manual redirects never follow an upstream redirect', async
   const response = await serveMuseumJSON(request, 'https://openaccess-api.clevelandart.org/api/artworks/', 1000, x => x, db, fetcher);
   assert.equal(response.status, 502);
   assert.equal(calls, 1);
+});
+
+
+test('Vercel memory fallback enforces local quotas and stores cache without Cloudflare', async () => {
+  const db = new MemoryPolicyDatabase();
+  for (let i = 0; i < 30; i++) await admitClient(db, 'client:vercel', now);
+  await assert.rejects(() => admitClient(db, 'client:vercel', now), { status: 429 });
+  const results = await Promise.allSettled(Array.from({ length: 10 }, () => reserveMuseumRequest(db, now)));
+  assert.equal(results.filter(r => r.status === 'fulfilled').length, 1);
+  await writeMuseumCache(db, 'vercel-cache', '{"ok":true}', 1000, now);
+  assert.equal((await readMuseumCache(db, 'vercel-cache'))?.body, '{"ok":true}');
+});
+
+test('missing Redis uses explicitly scoped local protection; partial config fails closed', () => {
+  const oldUrl = process.env.UPSTASH_REDIS_REST_URL, oldToken = process.env.UPSTASH_REDIS_REST_TOKEN;
+  try {
+    delete process.env.UPSTASH_REDIS_REST_URL; delete process.env.UPSTASH_REDIS_REST_TOKEN;
+    assert.equal(getProtectionStore().scope, 'instance');
+    process.env.UPSTASH_REDIS_REST_URL = 'https://redis.example';
+    assert.throws(() => getProtectionStore(), /Incomplete/);
+  } finally {
+    if (oldUrl === undefined) delete process.env.UPSTASH_REDIS_REST_URL; else process.env.UPSTASH_REDIS_REST_URL = oldUrl;
+    if (oldToken === undefined) delete process.env.UPSTASH_REDIS_REST_TOKEN; else process.env.UPSTASH_REDIS_REST_TOKEN = oldToken;
+  }
+});
+
+test('Redis quota updates use a single atomic Lua operation and do not leak tokens into URLs', async () => {
+  const original = globalThis.fetch;
+  const commands: unknown[][] = [];
+  globalThis.fetch = (async (url: unknown, options?: RequestInit) => {
+    assert.equal(url, 'https://redis.example');
+    assert.equal(new Headers(options?.headers).get('Authorization'), 'Bearer test-only-token');
+    const command = JSON.parse(String(options?.body)); commands.push(command);
+    return Response.json({ result: JSON.stringify({ count: 1 }) });
+  }) as typeof fetch;
+  try {
+    await admitClient(new RedisPolicyDatabase('https://redis.example', 'test-only-token'), 'client:test', now);
+    assert.equal(commands.length, 1);
+    assert.equal(commands[0][0], 'EVAL');
+    assert.ok(String(commands[0][1]).includes('HSET'));
+    assert.ok(String(commands[0][1]).includes('PEXPIREAT'));
+  } finally { globalThis.fetch = original; }
 });
