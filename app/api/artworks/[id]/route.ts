@@ -1,12 +1,13 @@
-import { NextResponse } from 'next/server';
 import { museumFields, normalizeArtwork, type MuseumArtwork } from '@/lib/artworks';
-export async function GET(_request:Request,{params}:{params:Promise<{id:string}>}){
- const {id}=await params;
- if(!/^\d{1,8}$/.test(id))return NextResponse.json({error:'Invalid artwork.'},{status:400});
- try{const res=await fetch(`https://openaccess-api.clevelandart.org/api/artworks/${id}?fields=${museumFields}`,{signal:AbortSignal.timeout(20000)});
- if(!res.ok)return NextResponse.json({error:'This artwork could not be loaded.'},{status:res.status===404?404:502});
- const result=await res.json() as {data:MuseumArtwork};const art=normalizeArtwork(result.data);
- if(!art.is_public_domain||!art.image_url)return NextResponse.json({error:'This artwork is not available in our open collection.'},{status:404});
- return NextResponse.json({data:art,config:{iiif_url:''}},{headers:{'Cache-Control':'public, s-maxage=3600'}});
- }catch{return NextResponse.json({error:'We couldn’t load this artwork. Please try again.'},{status:502});}
+import { protectedMuseumJSON } from '@/lib/museum-service';
+import { POLICY, PolicyError } from '@/lib/museum-policy';
+export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  if (!/^[1-9]\d{0,7}$/.test(id) || new URL(request.url).search) return Response.json({ error: 'Invalid artwork.' }, { status: 400, headers: { 'Cache-Control': 'no-store' } });
+  return protectedMuseumJSON<{ data: MuseumArtwork }>(request, `https://openaccess-api.clevelandart.org/api/artworks/${id}?fields=${museumFields}`, POLICY.detailTtlMs, result => {
+    if (!result.data?.id) throw new PolicyError('This artwork could not be found.', 404, 30);
+    const art = normalizeArtwork(result.data);
+    if (!art.is_public_domain || !art.image_url) throw new PolicyError('This artwork is not available in our open collection.', 404, 30);
+    return { data: art, config: { iiif_url: '' } };
+  });
 }
