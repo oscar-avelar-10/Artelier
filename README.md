@@ -2,6 +2,8 @@
 
 An independent art-discovery portfolio project by Oscar Avelar. Explore public-domain artworks from the Cleveland Museum of Art, search artists and titles, filter by medium and period, inspect artwork details, and build a browser-local collection.
 
+**Live:** https://artelier-oa.vercel.app
+
 ## Stack
 
 Next.js App Router, React, TypeScript, TanStack Query, Tailwind CSS and custom CSS. Production target: Vercel / Node.js. The app does not require ChatGPT authentication.
@@ -40,6 +42,8 @@ See `.env.example`. Never prefix these secrets with `NEXT_PUBLIC_`, commit real 
 - Search pagination is capped at 100 pages.
 
 ## Abuse protection and deployment scope
+
+The Vercel project also has an active production firewall rule, `Protect museum API`: requests with a path starting with `/api/artworks` are rate-limited by IP to 30 requests per 60-second fixed window at the edge. This project setting persists across deployments; the rules below describe the separate application-level controls.
 
 The protection policy retains these limits:
 
