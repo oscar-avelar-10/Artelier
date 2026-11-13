@@ -2,7 +2,7 @@
 
 An art discovery application for exploring open-access works from the Cleveland Museum of Art. Search artists and artworks, browse by medium and period, examine artwork details, and save favorites to a personal collection.
 
-[Live Demo](https://artelier-oa.vercel.app)
+[Live Demo](https://artelier-oa.vercel.app) · [Report an Issue](https://github.com/oscar-avelar-10/Artelier/issues)
 
 ## Features
 
@@ -36,9 +36,9 @@ An art discovery application for exploring open-access works from the Cleveland 
 
 ### Installation
 
-Clone this repository, open the project directory, and run:
-
 ```bash
+git clone https://github.com/oscar-avelar-10/Artelier.git
+cd Artelier
 npm ci
 npm run dev
 ```
