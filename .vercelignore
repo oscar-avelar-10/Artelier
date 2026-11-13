@@ -8,12 +8,10 @@ node_modules
 .vinext
 dist
 outputs
-.openai
 worker
 scripts
 db
 drizzle
-vite.config.ts
 drizzle.config.ts
 cloudflare-env.d.ts
 examples

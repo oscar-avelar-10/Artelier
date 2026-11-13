@@ -52,7 +52,6 @@
     "scripts",
     "db",
     "worker",
-    "vite.config.ts",
     "drizzle.config.ts"
   ]
 }
